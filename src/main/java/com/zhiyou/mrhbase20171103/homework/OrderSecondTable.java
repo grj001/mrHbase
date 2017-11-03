@@ -1,11 +1,7 @@
-package com.zhiyou.mrhbase20171103;
+package com.zhiyou.mrhbase20171103.homework;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -29,15 +25,15 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 
-//订单row设计: 
-// customId(4 bytes)+日期反向(8)+order(4)
-public class OrderEtl {
+
+public class OrderSecondTable {
+
 	
 	public static Connection connection;
 	public static Admin admin;
 	
 	
-	public OrderEtl() throws IOException{
+	public OrderSecondTable() throws IOException{
 		connection = ConnectionFactory.createConnection();
 		admin = connection.getAdmin();
 	}
@@ -45,24 +41,23 @@ public class OrderEtl {
 	
 	
 	public static  byte[] getOrderRowKey(
-			int customerId
-			, Date date
-			, int orderId
+			int order_item_id
+			, int order_id
+			, int product_id
 			){
 		
 		ByteBuffer result = ByteBuffer.allocate(16);
-		result.put(Bytes.toBytes(customerId));
-		result.put(Bytes.toBytes(Long.MAX_VALUE - date.getTime()));
-		result.put(Bytes.toBytes(orderId));
+		result.put(Bytes.toBytes(order_item_id));
+		result.put(Bytes.toBytes(order_id));
+		result.put(Bytes.toBytes(product_id));
 		
 		return result.array();
 	}
 	
 	
-	public static class OrderEtlMap extends Mapper<LongWritable, Text, Text, NullWritable>{
+	public static class OrderSecondTableMap extends Mapper<LongWritable, Text, Text, NullWritable>{
 		
 		public final NullWritable NULL = NullWritable.get();
-		
 		
 		@Override
 		protected void map(LongWritable key, Text value, Mapper<LongWritable, Text, Text, NullWritable>.Context context)
@@ -76,18 +71,16 @@ public class OrderEtl {
 	
 	
 	//create 'bd14:order', 'i'
-	public static class OrderEtlReduce 
+	public static class OrderSecondTableReduce 
 	extends TableReducer<Text, NullWritable, NullWritable>{
 
 		private String[] infos;
 		private Put outValue;
 		public final NullWritable NULL = NullWritable.get();
 		
-		private int orderId;
-		private int customerId;
-		private Date orderDate;
-		
-		private SimpleDateFormat DateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		private int order_item_id;
+		private int order_id;
+		private int product_id;
 		
 		@Override
 		protected void reduce(
@@ -99,17 +92,12 @@ public class OrderEtl {
 			
 			infos = key.toString().split("\\|");
 			
-			try {
-				orderId = Integer.valueOf(infos[0]);
-				orderDate = DateFormat.parse(infos[1]);
-				customerId = Integer.valueOf(infos[2]);
-				outValue = new Put(getOrderRowKey(customerId, orderDate, orderId));
-				
-				outValue.addColumn(Bytes.toBytes("i"), Bytes.toBytes("status"), Bytes.toBytes(infos[3]));
-				outValue.addColumn(Bytes.toBytes("i"), Bytes.toBytes("date"), Bytes.toBytes(infos[1]));
-			} catch (ParseException e) {
-				e.printStackTrace();
-			}
+			order_item_id = Integer.valueOf(infos[0]);
+			order_id = Integer.valueOf(infos[1]);
+			product_id = Integer.valueOf(infos[2]);
+			outValue = new Put(Bytes.toBytes(infos[4]));
+			//
+			outValue.addColumn(Bytes.toBytes("i"), Bytes.toBytes("key"), getOrderRowKey(order_item_id, order_id, product_id));
 			
 			context.write(NULL, outValue);
 		}
@@ -123,9 +111,10 @@ public class OrderEtl {
 	public static void main(String[] args) 
 			throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = HBaseConfiguration.create();
-		Job job = Job.getInstance(conf, "orderInfo, 字节");
+		Job job = Job.getInstance(conf, "order_items_second");
+		job.setJarByClass(OrderSecondTable.class);
 		
-		job.setMapperClass(OrderEtlMap.class);
+		job.setMapperClass(OrderSecondTableMap.class);
 		
 		job.setMapOutputKeyClass(Text.class);
 		job.setMapOutputValueClass(NullWritable.class);
@@ -137,9 +126,9 @@ public class OrderEtl {
 		
 		TableMapReduceUtil
 		.initTableReducerJob(
-				"orderdata:orders", OrderEtlReduce.class, job);
+				"orderdata:order_items02", OrderSecondTableReduce.class, job);
 		
-		FileInputFormat.addInputPath(job, new Path("/user/orderdata/orders"));
+		FileInputFormat.addInputPath(job, new Path("/user/orderdata/order_items"));
 		
 		System.exit(job.waitForCompletion(true)?0:1);
 	}
@@ -148,9 +137,9 @@ public class OrderEtl {
 	//判读表是否存在
 	public static void orTableExists() throws IOException{
 		
-		OrderEtl orderEtl = new OrderEtl();
+		OrderSecondTable orderSecondTable = new OrderSecondTable();
 		
-		TableName tName = TableName.valueOf("orderdata:orders");
+		TableName tName = TableName.valueOf("orderdata:order_items02");
 		HTableDescriptor hDescriptor = new HTableDescriptor(tName);
 		if(!admin.tableExists(tName)){
 			System.out.println("表"+tName+"不存在");
@@ -164,14 +153,6 @@ public class OrderEtl {
 			admin.truncateTable(tName, false);
 		}
 	}
-	
-	
-	
-	
-	
-	
-	
-	
 	
 	
 }
