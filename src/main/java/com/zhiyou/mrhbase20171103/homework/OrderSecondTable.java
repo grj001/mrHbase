@@ -70,16 +70,16 @@ public class OrderSecondTable {
 				throws IOException, InterruptedException {
 			
 			byte[] rowKey = value.getRow();
-			byte[] outValue = value.getValue(Bytes.toBytes("i"), Bytes.toBytes("subtotal"));
+			byte[] subtotal = value.getValue(Bytes.toBytes("i"), Bytes.toBytes("subtotal"));
 			
 			int order_item_id = Bytes.toInt(rowKey,0,4);
 			int order_id = Bytes.toInt(rowKey,4,4);
 			int product_id = Bytes.toInt(rowKey,8,4);
 			
-			outKey.set(order_item_id+","+order_id+","+product_id);
-			this.outValue.set(outValue);
+			outKey.set(subtotal);
+			this.outValue.set(order_item_id+","+order_id+","+product_id);
 			
-			
+			// key:subtotal  value:rowKey
 			context.write(outKey, this.outValue);
 		}
 	}
@@ -94,33 +94,38 @@ public class OrderSecondTable {
 		private Put outValue;
 		private String[] infos;
 		private NullWritable NULL = NullWritable.get();
+		private int sum;
 		
 		@Override
 		protected void reduce(
-				Text key
-				, Iterable<Text> values
+				Text key //subtotal
+				, Iterable<Text> values //Iterable<rowKey>
 				, Reducer<Text, Text, NullWritable, Mutation>
 				.Context context)
 				throws IOException, InterruptedException {
+			
+			sum = 1;
+			
+			outValue = 
+					new Put(
+							Bytes.toBytes("subtotal:"+key.toString())
+						);
+			System.out.println(key.toString());
 			for(Text value : values){
-				infos = key.toString().split(",");
-				System.out.println(value);
+				infos = value.toString().split(",");
+				System.out.println("\tvalue:"+value);
 				
-				outValue = 
-						new Put(
-								Bytes.toBytes(value.toString())
-							);
+				
 				outValue.addColumn(
 						Bytes.toBytes("i")
-						, Bytes.toBytes("key")
-						, 
-						getOrderRowKey(
-								Integer.valueOf(infos[0])
-								, Integer.valueOf(infos[1])
-								, Integer.valueOf(infos[2]))
+						, Bytes.toBytes("key"+(sum++))
+						, getOrderRowKey(
+										Integer.valueOf(infos[0])
+										, Integer.valueOf(infos[1])
+										, Integer.valueOf(infos[2]))
 							);
-				context.write(NULL, outValue);
 			}
+			context.write(NULL, outValue);
 		}
 	}
 	
