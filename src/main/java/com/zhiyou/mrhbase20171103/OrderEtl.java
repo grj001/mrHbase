@@ -87,7 +87,7 @@ public class OrderEtl {
 		private int customerId;
 		private Date orderDate;
 		
-		private SimpleDateFormat DateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		
 		@Override
 		protected void reduce(
@@ -101,7 +101,7 @@ public class OrderEtl {
 			
 			try {
 				orderId = Integer.valueOf(infos[0]);
-				orderDate = DateFormat.parse(infos[1]);
+				orderDate = dateFormat.parse(infos[1]);
 				customerId = Integer.valueOf(infos[2]);
 				outValue = new Put(getOrderRowKey(customerId, orderDate, orderId));
 				

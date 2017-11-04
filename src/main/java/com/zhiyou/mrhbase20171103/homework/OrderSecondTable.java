@@ -2,9 +2,9 @@ package com.zhiyou.mrhbase20171103.homework;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
@@ -14,16 +14,19 @@ import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
 import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+import org.apache.hadoop.hbase.mapreduce.TableMapper;
 import org.apache.hadoop.hbase.mapreduce.TableReducer;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.junit.Test;
 
 
 public class OrderSecondTable {
@@ -37,7 +40,6 @@ public class OrderSecondTable {
 		connection = ConnectionFactory.createConnection();
 		admin = connection.getAdmin();
 	}
-	
 	
 	
 	public static  byte[] getOrderRowKey(
@@ -55,14 +57,30 @@ public class OrderSecondTable {
 	}
 	
 	
-	public static class OrderSecondTableMap extends Mapper<LongWritable, Text, Text, NullWritable>{
-		
-		public final NullWritable NULL = NullWritable.get();
-		
+	public static class OrderSecondTableMap 
+	extends TableMapper<Text, Text>{
+		private Text outKey = new Text();
+		private Text outValue = new Text();
+
 		@Override
-		protected void map(LongWritable key, Text value, Mapper<LongWritable, Text, Text, NullWritable>.Context context)
+		protected void map(ImmutableBytesWritable key, Result value,
+				Mapper<
+				ImmutableBytesWritable, Result, Text, Text>
+				.Context context)
 				throws IOException, InterruptedException {
-			context.write(value, NULL);
+			
+			byte[] rowKey = value.getRow();
+			byte[] outValue = value.getValue(Bytes.toBytes("i"), Bytes.toBytes("subtotal"));
+			
+			int order_item_id = Bytes.toInt(rowKey,0,4);
+			int order_id = Bytes.toInt(rowKey,4,4);
+			int product_id = Bytes.toInt(rowKey,8,4);
+			
+			outKey.set(order_item_id+","+order_id+","+product_id);
+			this.outValue.set(outValue);
+			
+			
+			context.write(outKey, this.outValue);
 		}
 	}
 	
@@ -72,34 +90,37 @@ public class OrderSecondTable {
 	
 	//create 'bd14:order', 'i'
 	public static class OrderSecondTableReduce 
-	extends TableReducer<Text, NullWritable, NullWritable>{
-
-		private String[] infos;
+	extends TableReducer<Text, Text, NullWritable>{
 		private Put outValue;
-		public final NullWritable NULL = NullWritable.get();
-		
-		private int order_item_id;
-		private int order_id;
-		private int product_id;
+		private String[] infos;
+		private NullWritable NULL = NullWritable.get();
 		
 		@Override
 		protected void reduce(
 				Text key
-				, Iterable<NullWritable> values
-				, Reducer<Text, NullWritable, NullWritable, Mutation>
+				, Iterable<Text> values
+				, Reducer<Text, Text, NullWritable, Mutation>
 				.Context context)
 				throws IOException, InterruptedException {
-			
-			infos = key.toString().split("\\|");
-			
-			order_item_id = Integer.valueOf(infos[0]);
-			order_id = Integer.valueOf(infos[1]);
-			product_id = Integer.valueOf(infos[2]);
-			outValue = new Put(Bytes.toBytes(infos[4]));
-			//
-			outValue.addColumn(Bytes.toBytes("i"), Bytes.toBytes("key"), getOrderRowKey(order_item_id, order_id, product_id));
-			
-			context.write(NULL, outValue);
+			for(Text value : values){
+				infos = key.toString().split(",");
+				System.out.println(value);
+				
+				outValue = 
+						new Put(
+								Bytes.toBytes(value.toString())
+							);
+				outValue.addColumn(
+						Bytes.toBytes("i")
+						, Bytes.toBytes("key")
+						, 
+						getOrderRowKey(
+								Integer.valueOf(infos[0])
+								, Integer.valueOf(infos[1])
+								, Integer.valueOf(infos[2]))
+							);
+				context.write(NULL, outValue);
+			}
 		}
 	}
 	
@@ -114,21 +135,31 @@ public class OrderSecondTable {
 		Job job = Job.getInstance(conf, "order_items_second");
 		job.setJarByClass(OrderSecondTable.class);
 		
-		job.setMapperClass(OrderSecondTableMap.class);
-		
-		job.setMapOutputKeyClass(Text.class);
-		job.setMapOutputValueClass(NullWritable.class);
 		
 		
 		//判读表是否存在
 		orTableExists();
 		
+		Scan scan = new Scan();
+		TableMapReduceUtil
+		.initTableMapperJob(
+				"orderdata:order_items"
+				, scan
+				, OrderSecondTableMap.class
+				, Text.class
+				, Text.class
+				, job);
+				
+		
+		
+		
 		
 		TableMapReduceUtil
 		.initTableReducerJob(
-				"orderdata:order_items02", OrderSecondTableReduce.class, job);
+				"orderdata:order_items02"
+				, OrderSecondTableReduce.class
+				, job);
 		
-		FileInputFormat.addInputPath(job, new Path("/user/orderdata/order_items"));
 		
 		System.exit(job.waitForCompletion(true)?0:1);
 	}
@@ -153,6 +184,43 @@ public class OrderSecondTable {
 			admin.truncateTable(tName, false);
 		}
 	}
+	
+	
+	
+	@Test
+	public void test01(){
+		int order_item_id = 123;
+		int order_id = 123;
+		int product_id = 123;
+		
+		
+		ByteBuffer result = ByteBuffer.allocate(16);
+		result.put(Bytes.toBytes(order_item_id));
+		result.put(Bytes.toBytes(order_id));
+		result.put(Bytes.toBytes(product_id));
+		result.put(Bytes.toBytes(123));
+		result.put(Bytes.toBytes(123));
+		
+		System.out.println(Arrays.toString(result.array()));
+		System.out.println(Bytes.toInt(result.array()));
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	
 }

@@ -34,7 +34,8 @@ public class MrFromHBase {
 
 		@Override
 		protected void map(ImmutableBytesWritable key, Result value,
-				Mapper<ImmutableBytesWritable, Result, Text, Text>.Context context)
+				Mapper<ImmutableBytesWritable, Result, Text, Text>
+				.Context context)
 				throws IOException, InterruptedException {
 			// 从Result那暑
 			CellScanner scanner = value.cellScanner();
@@ -46,7 +47,9 @@ public class MrFromHBase {
 				columnValue = Bytes.toString(CellUtil.cloneValue(cell));
 
 				outKey.set(rowKey);
-				outValue.set(columnFamily + ":" + columnQualify + ":" + columnValue);
+				outValue.set(columnFamily 
+						+ ":" + columnQualify 
+						+ ":" + columnValue);
 
 				context.write(outKey, outValue);
 			}
@@ -55,7 +58,8 @@ public class MrFromHBase {
 
 	
 	
-	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+	public static void main(String[] args) 
+			throws Exception {
 
 		Configuration conf = HBaseConfiguration.create();
 		Job job = Job.getInstance(conf, "mapreduce从hbase中读取数据");
