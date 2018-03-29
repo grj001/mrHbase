@@ -19,7 +19,6 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
-
 public class MrFromHBase {
 
 	public static class MrFromHBaseMap extends TableMapper<Text, Text> {
@@ -34,8 +33,7 @@ public class MrFromHBase {
 
 		@Override
 		protected void map(ImmutableBytesWritable key, Result value,
-				Mapper<ImmutableBytesWritable, Result, Text, Text>
-				.Context context)
+				Mapper<ImmutableBytesWritable, Result, Text, Text>.Context context)
 				throws IOException, InterruptedException {
 			// 从Result那暑
 			CellScanner scanner = value.cellScanner();
@@ -47,48 +45,32 @@ public class MrFromHBase {
 				columnValue = Bytes.toString(CellUtil.cloneValue(cell));
 
 				outKey.set(rowKey);
-				outValue.set(columnFamily 
-						+ ":" + columnQualify 
-						+ ":" + columnValue);
+				outValue.set(columnFamily + ":" + columnQualify + ":" + columnValue);
 
 				context.write(outKey, outValue);
 			}
 		}
 	}
 
-	
-	
-	public static void main(String[] args) 
-			throws Exception {
+	public static void main(String[] args) throws Exception {
 
 		Configuration conf = HBaseConfiguration.create();
 		Job job = Job.getInstance(conf, "mapreduce从hbase中读取数据");
 		job.setJarByClass(MrFromHBase.class);
 
-//		job.setMapperClass(MrFromHBaseMap.class);
+		// job.setMapperClass(MrFromHBaseMap.class);
 		// job.setReducerClass(MrToHBaseReduce.class);
 		job.setNumReduceTasks(0);
 
-		
 		Scan scan = new Scan();
-		
-		
 
 		// job.setOutputKeyClass(NullWritable.class);
 		// job.setOutputValueClass(Mutation.class);
 
-		TableMapReduceUtil.initTableMapperJob(
-				"bd14:fromjava"
-				, scan
-				, MrFromHBaseMap.class
-				, Text.class
-				, Text.class
-				, job);
-		
-		
+		TableMapReduceUtil.initTableMapperJob("bd14:fromjava", scan, MrFromHBaseMap.class, Text.class, Text.class, job);
 
-		Path outputDir = new Path("/user/output/MrFromHBase");
-		outputDir.getFileSystem(conf).delete(outputDir,true);
+		Path outputDir = new Path("/output/MrFromHBase");
+		outputDir.getFileSystem(conf).delete(outputDir, true);
 		FileOutputFormat.setOutputPath(job, outputDir);
 
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
