@@ -72,7 +72,6 @@ public class OrderEtlCopy {
 		protected void reduce(Text arg0, Iterable<NullWritable> arg1,
 				Reducer<Text, NullWritable, NullWritable, Mutation>.Context arg2)
 				throws IOException, InterruptedException {
-			// TODO Auto-generated method stub
 			super.reduce(arg0, arg1, arg2);
 		}
 		

@@ -1,11 +1,9 @@
 package com.zhiyou.mrhbase20171103;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import org.apache.commons.configuration.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
@@ -21,6 +19,7 @@ public class FindOrder {
 	public void findByDate(
 			Date StartDate, Date endDate, int customerId) throws IOException{
 		
+		//set hbase scan startRowKey
 		byte[] startRowKey = 
 				OrderEtl
 				.getOrderRowKey(
@@ -28,6 +27,7 @@ public class FindOrder {
 						, endDate
 						, Integer.MIN_VALUE);
 		
+		//set hbase scan endRowKey
 		byte[] endRowKey = 
 				OrderEtl
 				.getOrderRowKey(
@@ -39,7 +39,11 @@ public class FindOrder {
 //		scan.setStartRow(startRowKey);
 //		scan.setStopRow(endRowKey);
 		
-		//连接hbase
+		/*
+		 * 连接hbase,输出hbase orderdata:orders表中的数据
+		 * rowkey设计为根据int的byte值是定长,取出对应int值
+		 */
+		
 		Connection connection = 
 				ConnectionFactory.createConnection(
 						HBaseConfiguration.create());
@@ -49,15 +53,22 @@ public class FindOrder {
 		ResultScanner rs = orderTable.getScanner(scan);
 		Result result = new Result();
 		while((result = rs.next()) != null){
+			/*
+			 * print : 
+			 * i:date---i:status---rowkey(0,4)---rowkey(12,4)
+			 */
 			System.out.println(
-					Bytes.toString(result.getValue(Bytes.toBytes("i")
+					Bytes.toString(result.getValue(
+							Bytes.toBytes("i")
 							, Bytes.toBytes("date")))
 					+"---"+ 
 					Bytes.toString(result.getValue(
 							Bytes.toBytes("i")
 							, Bytes.toBytes("status")
 							))
-					+"---"+Bytes.toInt(result.getRow(),0,4)+", "+
+					+"---"+
+					Bytes.toInt(result.getRow(),0,4)
+					+", "+
 					Bytes.toInt(result.getRow(),12,4)
 					);
 		}

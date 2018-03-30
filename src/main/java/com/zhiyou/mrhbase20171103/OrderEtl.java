@@ -29,7 +29,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 
-//订单row设计: 
+// 订单row设计: 
 // customId(4 bytes)+日期反向(8)+order(4)
 public class OrderEtl {
 	
